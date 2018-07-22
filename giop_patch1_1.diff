@@ -1,0 +1,618 @@
+Index: libpcap-0.4a6/gencode.c
+diff -c libpcap-0.4a6/gencode.c:1.1.1.1 libpcap-0.4a6/gencode.c:1.2
+*** libpcap-0.4a6/gencode.c:1.1.1.1	Wed Apr 29 15:13:13 1998
+--- libpcap-0.4a6/gencode.c	Wed Apr 29 15:35:36 1998
+***************
+*** 936,942 ****
+  	struct block *b0, *b1;
+  
+  	switch (proto) {
+! 
+  	case Q_TCP:
+  		b0 = gen_linktype(ETHERTYPE_IP);
+  		b1 = gen_cmp(off_nl + 9, BPF_B, (bpf_int32)IPPROTO_TCP);
+--- 936,953 ----
+  	struct block *b0, *b1;
+  
+  	switch (proto) {
+! 		/*
+! 		 * I put this here for efficiency. I guess it really belongs
+! 		 * on top of TCP in tcpdump, then again it is GIOP and not
+! 		 * IIOP. Any suggestions?
+! 		 * ciaran@broadcom.ie
+! 		 */
+! 	case Q_GIOP:
+! 		b0 = gen_linktype(ETHERTYPE_IP);
+! 		b1 = gen_cmp(off_nl + 40, BPF_W, (bpf_int32)IPPROTO_GIOP);
+! 		gen_and(b0, b1);
+! 		break;
+! 		
+  	case Q_TCP:
+  		b0 = gen_linktype(ETHERTYPE_IP);
+  		b1 = gen_cmp(off_nl + 9, BPF_B, (bpf_int32)IPPROTO_TCP);
+Index: libpcap-0.4a6/gencode.h
+diff -c libpcap-0.4a6/gencode.h:1.1.1.1 libpcap-0.4a6/gencode.h:1.2
+*** libpcap-0.4a6/gencode.h:1.1.1.1	Wed Apr 29 15:13:13 1998
+--- libpcap-0.4a6/gencode.h	Wed Apr 29 15:35:35 1998
+***************
+*** 52,57 ****
+--- 52,59 ----
+  #define	Q_MOPRC		14
+  #define	Q_MOPDL		15
+  
++ #define Q_GIOP      16
++ 
+  /* Directional qualifiers. */
+  
+  #define Q_SRC		1
+***************
+*** 61,66 ****
+--- 63,71 ----
+  
+  #define Q_DEFAULT	0
+  #define Q_UNDEF		255
++ 
++ /* General Inter-ORB Protocol */
++ #define IPPROTO_GIOP 0x47494F50
+  
+  struct stmt {
+  	int code;
+Index: libpcap-0.4a6/grammar.y
+diff -c libpcap-0.4a6/grammar.y:1.1.1.1 libpcap-0.4a6/grammar.y:1.2
+*** libpcap-0.4a6/grammar.y:1.1.1.1	Wed Apr 29 15:13:13 1998
+--- libpcap-0.4a6/grammar.y	Wed Apr 29 15:36:20 1998
+***************
+*** 103,109 ****
+  
+  %token  DST SRC HOST GATEWAY
+  %token  NET MASK PORT LESS GREATER PROTO BYTE
+! %token  ARP RARP IP TCP UDP ICMP IGMP IGRP
+  %token  ATALK DECNET LAT SCA MOPRC MOPDL
+  %token  TK_BROADCAST TK_MULTICAST
+  %token  NUM INBOUND OUTBOUND
+--- 103,109 ----
+  
+  %token  DST SRC HOST GATEWAY
+  %token  NET MASK PORT LESS GREATER PROTO BYTE
+! %token  ARP RARP IP TCP UDP GIOP ICMP IGMP IGRP
+  %token  ATALK DECNET LAT SCA MOPRC MOPDL
+  %token  TK_BROADCAST TK_MULTICAST
+  %token  NUM INBOUND OUTBOUND
+***************
+*** 226,231 ****
+--- 226,232 ----
+  	| RARP			{ $$ = Q_RARP; }
+  	| TCP			{ $$ = Q_TCP; }
+  	| UDP			{ $$ = Q_UDP; }
++     | GIOP          { $$ = Q_GIOP; }
+  	| ICMP			{ $$ = Q_ICMP; }
+  	| IGMP			{ $$ = Q_IGMP; }
+  	| IGRP			{ $$ = Q_IGRP; }
+Index: libpcap-0.4a6/scanner.l
+diff -c libpcap-0.4a6/scanner.l:1.1.1.1 libpcap-0.4a6/scanner.l:1.3
+*** libpcap-0.4a6/scanner.l:1.1.1.1	Wed Apr 29 15:13:14 1998
+--- libpcap-0.4a6/scanner.l	Thu Jun 11 10:34:19 1998
+***************
+*** 90,95 ****
+--- 90,97 ----
+  ip		return IP;
+  tcp		return TCP;
+  udp		return UDP;
++ iiop    return GIOP;
++ 
+  icmp		return ICMP;
+  igmp		return IGMP;
+  igrp		return IGRP;
+Index: tcpdump-3.4a6/INSTALL
+diff -c tcpdump-3.4a6/INSTALL:1.1.1.1 tcpdump-3.4a6/INSTALL:1.2
+*** tcpdump-3.4a6/INSTALL:1.1.1.1	Wed Apr 29 16:19:29 1998
+--- tcpdump-3.4a6/INSTALL	Wed May 13 14:37:53 1998
+***************
+*** 109,114 ****
+--- 109,115 ----
+  print-ether.c	- ethernet printer routines
+  print-fddi.c	- Fiber Distributed Data Interface printer routines
+  print-gre.c	- Generic Routing Encapsulation printer routines
++ print-giop.c - General Internet Inter-ORB Protocol printer routines
+  print-icmp.c	- Internet Control Message Protocol printer routines
+  print-igrp.c	- Interior Gateway Routing Protocol printer routines
+  print-ip.c	- ip printer routines
+Index: tcpdump-3.4a6/Makefile.in
+diff -c tcpdump-3.4a6/Makefile.in:1.1.1.1 tcpdump-3.4a6/Makefile.in:1.2
+*** tcpdump-3.4a6/Makefile.in:1.1.1.1	Wed Apr 29 16:19:29 1998
+--- tcpdump-3.4a6/Makefile.in	Wed Apr 29 16:41:47 1998
+***************
+*** 72,78 ****
+  	print-pim.c print-ppp.c print-raw.c print-rip.c print-sl.c \
+  	print-snmp.c print-sunrpc.c print-tcp.c print-tftp.c print-udp.c \
+  	print-wb.c addrtoname.c bpf_dump.c gmt2local.c machdep.c \
+! 	parsenfsfh.c util.c savestr.c setsignal.c
+  LOCALSRC =
+  GENSRC = version.c
+  
+--- 72,78 ----
+  	print-pim.c print-ppp.c print-raw.c print-rip.c print-sl.c \
+  	print-snmp.c print-sunrpc.c print-tcp.c print-tftp.c print-udp.c \
+  	print-wb.c addrtoname.c bpf_dump.c gmt2local.c machdep.c \
+! 	parsenfsfh.c util.c savestr.c setsignal.c print-giop.c
+  LOCALSRC =
+  GENSRC = version.c
+  
+***************
+*** 84,90 ****
+  HDR =   addrtoname.h appletalk.h bootp.h decnet.h \
+  	ethertype.h extract.h fddi.h gmt2local.h interface.h igrp.h \
+  	ipx.h llc.h machdep.h mib.h nfsfh.h nfsv2.h ntp.h ospf.h \
+! 	savestr.c setsignal.h
+  
+  TAGHDR = \
+  	/usr/include/arpa/tftp.h \
+--- 84,90 ----
+  HDR =   addrtoname.h appletalk.h bootp.h decnet.h \
+  	ethertype.h extract.h fddi.h gmt2local.h interface.h igrp.h \
+  	ipx.h llc.h machdep.h mib.h nfsfh.h nfsv2.h ntp.h ospf.h \
+! 	savestr.c setsignal.h giop.h
+  
+  TAGHDR = \
+  	/usr/include/arpa/tftp.h \
+Index: tcpdump-3.4a6/giop.h
+diff -c /dev/null tcpdump-3.4a6/giop.h:1.2
+*** /dev/null	Thu Jun 11 21:23:24 1998
+--- tcpdump-3.4a6/giop.h	Thu Jun 11 21:20:22 1998
+***************
+*** 0 ****
+--- 1,136 ----
++ /* $Id$
++  * Copyright (c) 1997 Broadcom Eireann Research Ltd.  All Rights Reserved
++  *
++  * Author: Ciaran Treanor
++  *
++  * Purpose:
++  *     IIOP (Internet Inter Orb Protocol)
++  *
++  * Notes:
++  *     
++  *
++  * $Log$
++  * Revision 1.2  1998/06/11 20:20:22  ct
++  * Added endianness support
++  *
++  * Revision 1.1  1998/04/29 15:43:22  ct
++  * Basic GIOP support
++  *
++  * Revision 1.1  1997/05/24 12:19:28  ct
++  * Initial revision
++  *
++  */
++ 
++ 
++ /*
++  * Notes
++  * enum encoded as unsigned long
++  * string encoded as unsigned long (length) followed by chars (no \0 at end)
++  * sequence encoded as unsigned long (length) followed by elements in seq
++  *
++  * Principal encoded as sequence<octet>
++  * Context encoded as sequence<string>
++  *     strings are in pairs, first is property name, second is value
++  */
++ #ifndef _GIOP_H
++ #define _GIOP_H
++ 
++ #include <sys/param.h>
++ 
++ typedef struct OctetSequence_s{
++   u_int32_t _length;
++   u_char _buffer;
++ } OctetSequence;
++ 
++ /*
++  * IOP
++  */
++ typedef struct ServiceContext_s {
++   u_int32_t context_id;
++   OctetSequence context_data;
++ } ServiceContext;
++ 
++ /*
++  * GIOP
++  */
++ /* GIOP Magic Number */
++ #ifdef WORDS_BIGENDIAN
++ #define GIOP_MAGIC 0x47494f50 /* 'G', 'I', 'O', 'P' */
++ #else
++ #define GIOP_MAGIC 0x504f4947
++ #endif
++ 
++ struct Version {
++ 	u_char major;
++ 	u_char minor;
++ };
++ 
++ enum MsgType_1_1 {
++ 	Request, Reply, CancelRequest, LocateRequest,
++ 	LocateReply, CloseConnection, MessageError, Fragment
++ };
++ 
++ /* Change flags to bitfields */
++ struct MessageHeader_1_x {
++ 	char magic[4];
++ 	struct Version GIOPVersion;
++ 	u_char flags; /* byte_order in GIOP 1.0 */
++ 	u_char messageType;
++ 	u_int32_t messageSize;
++ 	u_char payload;
++ };
++ 
++ struct Sequence {
++ 	u_int32_t numElements;
++ 	u_char payload;
++ };
++ 
++ struct ServiceContext {
++ 	u_int32_t service_id;
++ 	OctetSequence context_data;
++ 	u_char payload;
++ };
++ 
++ struct RequestHeader_1_0 {
++ 	u_int32_t request_id;
++ 	u_char response_expected;
++ 	OctetSequence object_key;
++ };
++ 
++ struct RequestHeader_1_1 {
++ 	u_int32_t request_id;
++ 	u_char response_expected;
++ 	u_char reserved[3];
++ 	OctetSequence object_key;
++ };
++ 
++ enum ReplyStatus {
++ 	NoException, UserException, SystemException, LocationForward
++ };
++ 
++ struct ReplyHeader {
++ 	u_int32_t request_id;
++ 	u_int32_t reply_status;
++ 	u_char payload;
++ };
++ 
++ struct SystemExceptionReplyBody {
++ 	OctetSequence exception_id; /* Should be a String, but... */
++ 	u_int32_t minor_code_value;
++ 	u_int32_t completion_status;
++ };
++ 
++ struct LocateRequestHeader {
++ 	u_int32_t request_id;
++ 	OctetSequence object_key;
++ };
++ 
++ enum LocateStatus {
++ 	UnknownObject, ObjectHere, ObjectForward
++ };
++ struct LocateReplyHeader {
++ 	u_int32_t request_id;
++ 	u_int32_t locate_status;
++ };
++ 
++ #endif /* _GIOP_H */
+Index: tcpdump-3.4a6/print-giop.c
+diff -c /dev/null tcpdump-3.4a6/print-giop.c:1.4
+*** /dev/null	Thu Jun 11 21:23:26 1998
+--- tcpdump-3.4a6/print-giop.c	Thu Jun 11 21:20:40 1998
+***************
+*** 0 ****
+--- 1,266 ----
++ /* $Id$
++  * Copyright (c) 1997 Broadcom Eireann Research Ltd.  All Rights Reserved
++  *
++  * Author: Ciaran Treanor
++  *
++  * Purpose:
++  *     Analyse and print GIOP (General Inter-ORO Protocol) packets
++  *
++  * Notes:
++  *     
++  *
++  * $Log$
++  * Revision 1.4  1998/06/11 20:20:40  ct
++  * Added endianness support
++  *
++  * Revision 1.3  1998/06/10 16:25:56  ct
++  * Made some sense of the v flags
++  * Cleaned up output
++  *
++  * Revision 1.2  1998/04/29 17:26:33  ct
++  * Fixed word alignment
++  *
++  * Revision 1.1  1997/05/24 12:15:17  ct
++  * Initial revision
++  *
++  */
++ 
++ #include "giop.h"
++ 
++ extern int vflag;
++ extern int snaplen;
++ 
++ #ifndef WORDS_BIGENDIAN
++ /*
++  * Swap the byte ordering of a word
++  *
++ void swaw(u_int32_t *from, u_int32_t *to) {
++     
++ }
++ */
++ #endif
++ 
++ /*
++  * There's gotta be a faster way to do this
++  * Shouldn't have vflag check here
++  */
++ u_char *print_object_key(int length, u_char *ptr) {
++     register int i = 0;
++     
++     if(vflag > 0) { 
++ 	printf("\"");
++ 	for(i=0; i++ < length; ptr++)
++ 	    isprint(*ptr) ? printf("%c", *ptr) : printf(".");
++ 	printf("\" ");
++     } else
++ 	ptr += length;
++     ptr += length%4 ? 4-length%4 : 0; /* Word align */
++     return ptr;
++ }
++ 
++ u_char *skip_context(u_char *ptr) {
++     register int length;
++     register struct ServiceContext *context;
++     
++     length = context->context_data._length;
++     context = (struct ServiceContext *)ptr;
++     ptr = &context->context_data._buffer;
++     ptr += length;
++     ptr += length%4 ? 4-length%4 : 0; /* Word align */
++     return ptr;
++ }
++ 
++ /*
++  * Print GIOP packets
++  */
++ void
++     giop_print(const u_char *packet, u_int length) {
++     struct MessageHeader_1_x *header;
++     u_char frag = 0;
++     int version;
++     int i;
++     u_char *data;
++     register const struct Sequence *seq;
++     register const struct RequestHeader_1_0 *reqHeader_1_0;
++     register const struct RequestHeader_1_1 *reqHeader_1_1;
++     register const struct ReplyHeader *repHeader;
++     register const OctetSequence *octetSeq;
++     register const struct SystemExceptionReplyBody *sysExRepBody;
++     register const struct LocateRequestHeader *locReqHeader;
++     register const struct LocateReplyHeader *locRepHeader;
++     
++     header = (struct MessageHeader_1_x *)packet;
++ #ifndef WORDS_BIGENDIAN
++     header->messageSize = ntohl(header->messageSize);
++     //swab(&header->messageSize, &header->messageSize, 4);
++ #endif
++     if(vflag > 1)
++ 	printf("%d.%d %d ", header->GIOPVersion.major, header->GIOPVersion.minor, header->messageSize);
++     version = header->GIOPVersion.major << 8 | header->GIOPVersion.minor;
++     switch(version) {
++     case 0x0100: /* 1.0 */
++ 	if(vflag > 2)
++ 	printf("%s ", header->flags ? "little" : "big");
++ 	break;
++     case 0x0101: /* 1.1 */
++ 	if(vflag > 2)
++ 	    printf("%s ", header->flags & 0x01 ? "little" : "big");
++ 	if(header->flags & 0x02)
++ 	    printf("frag ");
++ 	break;
++     }
++     /* Really should use sizeof(MessageHeader_1_x but I've got
++      * that extra payload byte in there
++      */
++     if(length != header->messageSize+12) {
++ 	printf("Increase snaplen to %d", header->messageSize+12);
++ 	return;
++     }
++     
++     switch(header->messageType) {
++     case Request:
++ 	printf("Request ");
++ 	
++ 	/* Need to check this */
++ 	seq = (struct Sequence *)(&header->payload);
++ 	data = (u_char *)&seq->payload;
++ #ifndef WORDS_BIGENDIAN
++ 	seq->numElements = ntohl(seq->numElements);
++ #endif
++ 	for(i = 0; i < seq->numElements; i++)
++ 	    data = skip_context(data);
++ 	
++ 	switch(version) {
++ 	case 0x0100: /* 1.0 */
++ 	    reqHeader_1_0 = (struct RequestHeader_1_0 *)(data);
++ #ifndef WORDS_BIGENDIAN
++ 	    reqHeader_1_0->request_id = ntohl(reqHeader_1_0->request_id);
++ 	    reqHeader_1_0->object_key._length = ntohl(reqHeader_1_0->object_key._length);
++ #endif
++ 	    printf("%d ", reqHeader_1_0->request_id);
++ 	    if(!reqHeader_1_0->response_expected)
++ 		printf("oneway ");
++ 	    
++ 	    data = print_object_key(reqHeader_1_0->object_key._length, 
++ 				    (u_char *)&reqHeader_1_0->object_key._buffer);
++ 	    octetSeq = (OctetSequence *)data; /* Should be String, but... */
++ #ifndef WORDS_BIGENDIAN
++ 	    octetSeq->_length = ntohl(octetSeq->_length);
++ #endif
++ 	    if(vflag > 2) {
++ 		data += octetSeq->_length + 4; // 4: skip octetSeq len word
++ 		data += octetSeq->_length%4 ? 4-octetSeq->_length%4 : 0; /* Word align */
++ 
++ 		printf("\"%s\" ", data + 4); // 4: skip principal octetSeq len word
++ 	    }
++ 	    break;
++ 	case 0x0101: /* 1.1 */
++ 	    reqHeader_1_1 = (struct RequestHeader_1_1 *)(data);
++ #ifndef WORDS_BIGENDIAN
++ 	    reqHeader_1_1->request_id = ntohl(reqHeader_1_1->request_id);
++ 	    reqHeader_1_1->object_key._length = ntohl(reqHeader_1_1->object_key._length);
++ #endif
++ 	    printf("%d ", reqHeader_1_1->request_id);
++ 	    if(!reqHeader_1_1->response_expected)
++ 		printf("oneway ");
++ 	    
++ 	    data = print_object_key(reqHeader_1_1->object_key._length, 
++ 				    (u_char *)&reqHeader_1_1->object_key._buffer);
++ 	    octetSeq = (OctetSequence *)data; /* Should be String, but... */
++ #ifndef WORDS_BIGENDIAN
++ 	    octetSeq->_length = ntohl(octetSeq->_length);
++ #endif
++ 	    if(vflag > 2) {
++ 		data += octetSeq->_length + 4; // 4: skip octetSeq len word
++ 		data += octetSeq->_length%4 ? 4-octetSeq->_length%4 : 0; /* Word align */
++ 		printf("\"%s\" ", data + 4); // 4: skip principal octetSeq len word
++ 	    }
++ 	    break;
++ 	}
++ 	printf("\"%s\"", &octetSeq->_buffer); /* Already null terminated */
++ 	break;
++     case Reply:
++ 	printf("Reply ");
++ 	
++ 	/* Need to check this */
++ 	seq = (struct Sequence *)(&header->payload);
++ #ifndef WORDS_BIGENDIAN
++ 	seq->numElements = ntohl(seq->numElements);
++ #endif
++ 	data = (u_char *)&seq->payload;
++ 	for(i = 0; i < seq->numElements; i++)
++ 	    data = skip_context(data);
++ 	
++ 	repHeader = (struct ReplyHeader *)(data);
++ #ifndef WORDS_BIGENDIAN
++ 	repHeader->request_id = ntohl(repHeader->request_id);
++ 	repHeader->reply_status = ntohl(repHeader->reply_status);
++ #endif
++ 	printf("%d ", repHeader->request_id);
++ 	switch(repHeader->reply_status) {
++ 	case NoException:
++ 	    break;
++ 	case UserException:
++ 	    octetSeq = (OctetSequence *)&repHeader->payload;
++ 	    /* Should be String */
++ 	    /* Already null terminated (repository_id) */
++ 	    printf("UserException: \"%s\"", &(octetSeq->_buffer));
++ 	    break;
++ 	case SystemException:
++ 	    printf("SystemException: ");
++ 	    sysExRepBody = (struct SystemExceptionReplyBody *)&repHeader->payload;
++ 	    /* Fix the SystemExceptionReplyBody in the header file */
++ 	    printf("\"%s\" %X:%X", &sysExRepBody->exception_id._buffer,
++ 		   sysExRepBody->minor_code_value,
++ 		   sysExRepBody->completion_status);
++ 	    break;
++ 	case LocationForward:
++ 	    printf("LocationForward");
++ 	    break;
++ 	}
++ 	break;
++     case CancelRequest:
++ 	/* Should be aligned OK since sizeof(MessageHeader) == 12 */
++ 	printf("CancelRequest %d", (u_int32_t)&header->payload);
++ 	break;
++     case LocateRequest:
++ 	locReqHeader = (struct LocateRequestHeader *)&header->payload;
++ #ifndef WORDS_BIGENDIAN
++ 	locReqHeader->object_key._length = ntohl(locReqHeader->object_key._length);
++ #endif
++ 	printf("LocateRequest %d", locReqHeader->request_id);
++ 	(void)print_object_key(locReqHeader->object_key._length, 
++ 			       (u_char *)&locReqHeader->object_key._buffer);
++ 	break;
++     case LocateReply:
++ 	locRepHeader = (struct LocateReplyHeader *)&header->payload;
++ #ifndef WORDS_BIGENDIAN
++ 	locRepHeader->request_id = ntohl(locRepHeader->request_id);
++ 	locRepHeader->locate_status = ntohl(locRepHeader->locate_status);
++ #endif
++ 	printf("LocateReply %d ", locRepHeader->request_id);
++ 	switch(locRepHeader->locate_status) {
++ 	case UnknownObject:
++ 	    printf("UnknownObject");
++ 	    break;
++ 	case ObjectHere:
++ 	    printf("ObjectHere");
++ 	    break;
++ 	case ObjectForward:
++ 	    printf("ObjectForward");
++ 	    break;
++ 	}
++ 	break;
++     case CloseConnection:
++ 	printf("CloseConnection");
++ 	break;
++     case MessageError:
++ 	printf("MessageError");
++ 	break;
++     case Fragment:
++ 	printf("Fragment");
++ 	break;
++     default:
++ 	printf("UNKNOWN MESSAGE: %04x", header->messageType);
++     }
++ }
+Index: tcpdump-3.4a6/print-tcp.c
+diff -c tcpdump-3.4a6/print-tcp.c:1.1.1.1 tcpdump-3.4a6/print-tcp.c:1.4
+*** tcpdump-3.4a6/print-tcp.c:1.1.1.1	Wed Apr 29 16:19:32 1998
+--- tcpdump-3.4a6/print-tcp.c	Thu Jun 11 10:33:21 1998
+***************
+*** 45,50 ****
+--- 45,51 ----
+  #include "interface.h"
+  #include "addrtoname.h"
+  #include "extract.h"
++ #include "giop.h"
+  
+  /* Compatibility */
+  #ifndef TCPOPT_WSCALE
+***************
+*** 107,112 ****
+--- 108,114 ----
+  	register char ch;
+  	u_short sport, dport, win, urp;
+  	u_int32_t seq, ack;
++ 	u_char *giop;
+  
+  	tp = (struct tcphdr *)bp;
+  	ip = (struct ip *)bp2;
+***************
+*** 127,132 ****
+--- 129,146 ----
+  	(void)printf("%s.%s > %s.%s: ",
+  		ipaddr_string(&ip->ip_src), tcpport_string(sport),
+  		ipaddr_string(&ip->ip_dst), tcpport_string(dport));
++ 
++     giop = (u_char *)tp + sizeof(struct tcphdr);
++     if(*((u_int32_t *)giop)  == GIOP_MAGIC) {
++ 	printf("iiop ");
++ 	if(snaplen > 80) {
++ 	    giop_print(giop, length - sizeof(struct tcphdr));
++ 	    return;
++ 	} else {
++ 	    printf("<truncated>");
++ 	    return;
++ 	}
++     }
+  
+  	if (qflag) {
+  		(void)printf("tcp %d", length - tp->th_off * 4);
